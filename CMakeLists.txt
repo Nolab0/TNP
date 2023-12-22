@@ -8,5 +8,4 @@ include_directories(eigen-3.4.0 src)
 add_executable(ransac
         src/ransac.cpp
         src/obj.cpp
-        src/kdtree.cpp
-        src/smooth.cpp)
+        src/kdtree.cpp)
