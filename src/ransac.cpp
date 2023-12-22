@@ -4,16 +4,13 @@
 #include <iostream>
 #include <random>
 
-std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points, size_t n, std::vector<bool> remainingPoints){
+std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points, size_t n, std::vector<size_t> remainingPointsIndices){
     std::vector<Eigen::Vector3f> sample_points;
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, points.size()-1);
+    std::uniform_int_distribution<> dis(0, remainingPointsIndices.size()-1);
     while (sample_points.size() < n){
-        Eigen::Vector3f p = points[dis(gen)];
-        if (!remainingPoints[dis(gen)]){
-            continue;
-        }
+        Eigen::Vector3f p = points[remainingPointsIndices[dis(gen)]];
         if (std::find(sample_points.begin(), sample_points.end(), p) == sample_points.end()){
             sample_points.push_back(p);
         }
@@ -21,7 +18,7 @@ std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points
     return sample_points;
 }
 
-void simpleRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector3f> & colors, Eigen::Vector3f color, std::vector<bool>& remainingPoints){
+std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector3f> & colors, Eigen::Vector3f color, std::vector<size_t> remainingPointsIndices){
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -32,18 +29,15 @@ void simpleRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector
     Eigen::Vector3f best_n;
     int best_count = 0;
     for (int i = 0; i < m; i++){
-        std::vector<Eigen::Vector3f> sample_points = getSamplePoints(points, 3, remainingPoints);
+        std::vector<Eigen::Vector3f> sample_points = getSamplePoints(points, 3, remainingPointsIndices);
 
         Eigen::Vector3f p = sample_points[0];
         Eigen::Vector3f q = sample_points[1];
         Eigen::Vector3f r = sample_points[2];
         Eigen::Vector3f n = ((q-p).cross(r-p)).normalized();
         int count = 0;
-        for (int j = 0; j < points.size(); j++){
-            if (!remainingPoints[j]){
-                continue;
-            }
-            Eigen::Vector3f point = points[j];
+        for (int j = 0; j < remainingPointsIndices.size(); j++){
+            Eigen::Vector3f point = points[remainingPointsIndices[j]];
             Eigen::Vector3f v = point - p;
             if (std::abs(v.dot(n)) < epsilon){
                 count++;
@@ -56,35 +50,32 @@ void simpleRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector
         }
     }
 
-    for (size_t i = 0; i < points.size(); i++){
-        Eigen::Vector3f v = points[i] - best_p;
-        if (remainingPoints[i] && std::abs(v.dot(best_n)) < epsilon){
-            colors[i] = color;
-            remainingPoints[i] = false;
+    std::vector<size_t> newRemainingPointsIndices;
+    for (size_t i = 0; i < remainingPointsIndices.size(); i++){
+        Eigen::Vector3f v = points[remainingPointsIndices[i]] - best_p;
+        if (std::abs(v.dot(best_n)) < epsilon){
+            colors[remainingPointsIndices[i]] = color;
+        }
+        else{
+            newRemainingPointsIndices.push_back(remainingPointsIndices[i]);
         }
     }
+    return newRemainingPointsIndices;
+}
+
+Eigen::Vector3f generateColor(){
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0f, 1.0f);
+    return Eigen::Vector3f(dis(gen), dis(gen), dis(gen));
 }
 
 void multiRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector3f> & colors){
-    Eigen::Vector3f color1(1.0f, 0.0f, 0.0f);  // Red
-    Eigen::Vector3f color2(0.0f, 1.0f, 0.0f);  // Green
-    Eigen::Vector3f color3(0.0f, 0.0f, 1.0f);  // Blue
-    Eigen::Vector3f color4(1.0f, 1.0f, 0.0f);  // Yellow
-    Eigen::Vector3f color5(1.0f, 0.0f, 1.0f);  // Magenta
-    Eigen::Vector3f color6(0.0f, 1.0f, 1.0f);  // Cyan
-    Eigen::Vector3f color7(0.5f, 0.5f, 0.5f);  // Gray
-    Eigen::Vector3f color8(1.0f, 0.5f, 0.0f);  // Orange
-    Eigen::Vector3f color9(0.5f, 1.0f, 0.0f);  // Lime
-    Eigen::Vector3f color10(0.0f, 0.5f, 1.0f); // Light Blue
-    Eigen::Vector3f color11(0.7f, 0.2f, 0.5f); // Custom Color
-    Eigen::Vector3f color12(0.3f, 0.8f, 0.1f); // Custom Color
-
-    std::vector<Eigen::Vector3f> colorVector = {color1, color2, color3, color4, color5, color6,
-                                                color7, color8, color9, color10, color11, color12};
-    std::vector<bool> remainingPoints(points.size(), true);
-    for (int i = 0; i < 5; i++)
+    std::vector<size_t> remainingPointsIndices(points.size());
+    std::iota(remainingPointsIndices.begin(), remainingPointsIndices.end(), 0);
+    while (remainingPointsIndices.size() > (size_t)(points.size() * 0.2f))
     {
-        simpleRansac(points, colors, colorVector[i], remainingPoints);
+        remainingPointsIndices = simpleRansac(points, colors, generateColor(), remainingPointsIndices);
     }
 }
 
