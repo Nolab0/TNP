@@ -3,6 +3,7 @@
 #include <obj.h>
 #include <iostream>
 #include <random>
+#include "kdtree.h"
 
 std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points, size_t n, std::vector<size_t> remainingPointsIndices){
     std::vector<Eigen::Vector3f> sample_points;
@@ -16,6 +17,16 @@ std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points
         }
     }
     return sample_points;
+}
+
+void buildPlane(std::vector<Eigen::Vector3f>& inliers, tnp::KdTree& kdTree, float radius, Eigen::Vector3f startingPoint, std::vector<Eigen::Vector3f> &colors, Eigen::Vector3f color, std::vector<size_t> &inliersIndices){
+    kdTree.for_each_neighbors(inliers, startingPoint, radius, [&](int i){
+        colors[inliersIndices[i]] = color;
+        Eigen::Vector3f p = inliers[i];
+        inliers.erase(inliers.begin() + i);
+        inliersIndices.erase(inliersIndices.begin() + i);
+        buildPlane(inliers, kdTree, radius, p, colors, color, inliersIndices);
+    });
 }
 
 std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals,std::vector<Eigen::Vector3f> &colors, Eigen::Vector3f color, std::vector<size_t> remainingPointsIndices){
@@ -58,13 +69,22 @@ std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f>& points, std::vect
         Eigen::Vector3f n = normals[remainingPointsIndices[i]];
 
         if (std::abs(v.dot(best_n)) < epsilon and std::abs(best_n.dot(n)) > 0.8f){
-            colors[remainingPointsIndices[i]] = color;
             inliersIndices.push_back(remainingPointsIndices[i]);
         }
         else{
             newRemainingPointsIndices.push_back(remainingPointsIndices[i]);
         }
     }
+
+    std::vector<Eigen::Vector3f> inliers;
+    for (size_t i = 0; i < inliersIndices.size(); i++){
+        inliers.push_back(points[inliersIndices[i]]);
+    }
+
+    float radius = 0.5f;
+    tnp::KdTree kdTree;
+    kdTree.build(inliers);
+    buildPlane(inliers, kdTree, radius, inliers[0], colors, color, inliersIndices);
 
     return newRemainingPointsIndices;
 }
