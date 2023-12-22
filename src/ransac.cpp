@@ -3,6 +3,7 @@
 #include <obj.h>
 #include <iostream>
 #include <random>
+#include "smooth.h"
 
 std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points, size_t n, std::vector<size_t> remainingPointsIndices){
     std::vector<Eigen::Vector3f> sample_points;
@@ -18,7 +19,21 @@ std::vector<Eigen::Vector3f> getSamplePoints(std::vector<Eigen::Vector3f> points
     return sample_points;
 }
 
-std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector3f> & colors, Eigen::Vector3f color, std::vector<size_t> remainingPointsIndices){
+void smooth_inliers(std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals, std::vector<size_t> inliersIndices){
+    std::vector<Eigen::Vector3f> inliersPoints;
+    std::vector<Eigen::Vector3f> inliersNormals;
+    for (size_t i = 0; i < inliersIndices.size(); i++){
+        inliersPoints.push_back(points[inliersIndices[i]]);
+        inliersNormals.push_back(normals[inliersIndices[i]]);
+    }
+    const auto [newInliersPoints, newInliersNormals] = smooth(inliersPoints, inliersNormals, 0.5f);
+    for (size_t i = 0; i < inliersIndices.size(); i++){
+        points[inliersIndices[i]] = newInliersPoints[i];
+        normals[inliersIndices[i]] = newInliersNormals[i];
+    }
+}
+
+std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals,std::vector<Eigen::Vector3f> &colors, Eigen::Vector3f color, std::vector<size_t> remainingPointsIndices){
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -51,15 +66,20 @@ std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f> points, std::vecto
     }
 
     std::vector<size_t> newRemainingPointsIndices;
+    std::vector<size_t> inliersIndices;
     for (size_t i = 0; i < remainingPointsIndices.size(); i++){
         Eigen::Vector3f v = points[remainingPointsIndices[i]] - best_p;
         if (std::abs(v.dot(best_n)) < epsilon){
             colors[remainingPointsIndices[i]] = color;
+            inliersIndices.push_back(remainingPointsIndices[i]);
         }
         else{
             newRemainingPointsIndices.push_back(remainingPointsIndices[i]);
         }
     }
+
+    smooth_inliers(points, normals, inliersIndices);
+
     return newRemainingPointsIndices;
 }
 
@@ -70,12 +90,12 @@ Eigen::Vector3f generateColor(){
     return Eigen::Vector3f(dis(gen), dis(gen), dis(gen));
 }
 
-void multiRansac(std::vector<Eigen::Vector3f> points, std::vector<Eigen::Vector3f> & colors){
+void multiRansac(std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals, std::vector<Eigen::Vector3f> & colors){
     std::vector<size_t> remainingPointsIndices(points.size());
     std::iota(remainingPointsIndices.begin(), remainingPointsIndices.end(), 0);
-    while (remainingPointsIndices.size() > (size_t)(points.size() * 0.2f))
+    while (remainingPointsIndices.size() > (size_t)(points.size() * 0.5f))
     {
-        remainingPointsIndices = simpleRansac(points, colors, generateColor(), remainingPointsIndices);
+        remainingPointsIndices = simpleRansac(points, normals, colors, generateColor(), remainingPointsIndices);
     }
 }
 
@@ -104,10 +124,10 @@ int main(int argc, char const *argv[])
     }
 
     // ransac -----------------------------------------------------------------
-    multiRansac(points, colors);
+    multiRansac(points, normals, colors);
     //simpleRansac(points, colors, Eigen::Vector3f(1.0f, 0.0f, 0.0f));
 
-    tnp::save_obj("ransac.obj", points, normals, colors);
+    tnp::save_obj("ransac_smooth.obj", points, normals, colors);
     
     return 0;
 }
