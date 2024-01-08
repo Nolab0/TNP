@@ -75,6 +75,7 @@ std::vector<size_t> simpleRansac(std::vector<Eigen::Vector3f>& points, std::vect
         }
     }
 
+    // Accroissement de régions non fonctionnel
     /*std::vector<Eigen::Vector3f> inliers;
     for (size_t i = 0; i < inliersIndices.size(); i++){
         inliers.push_back(points[inliersIndices[i]]);
@@ -100,7 +101,7 @@ Eigen::Vector3f generateColor(){
 void multiRansac(std::vector<Eigen::Vector3f>& points, std::vector<Eigen::Vector3f>& normals, std::vector<Eigen::Vector3f> & colors){
     std::vector<size_t> remainingPointsIndices(points.size());
     std::iota(remainingPointsIndices.begin(), remainingPointsIndices.end(), 0);
-    while (remainingPointsIndices.size() > (size_t)(points.size() * 0.5f))
+    while (remainingPointsIndices.size() > (size_t)(points.size() * 0.3f))
     {
         remainingPointsIndices = simpleRansac(points, normals, colors, generateColor(), remainingPointsIndices);
     }
@@ -123,6 +124,11 @@ int main(int argc, char const *argv[])
 
     if(not tnp::load_obj(filename, points, normals, colors)) {
         std::cout << "Failed to open input file '" << filename << "'" << std::endl;
+        return 1;
+    }
+
+    if (normals.size() == 0){
+        std::cerr << "Error: no normals in file" << std::endl;
         return 1;
     }
 
